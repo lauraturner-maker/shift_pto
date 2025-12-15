@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clinical Plugin Suite</title>
+    <style>
+        /* =========================================
+           GLOBAL & SHARED STYLES
+           ========================================= */
+        :root {
+            /* SHIFTS THEME */
+            --primary-teal: #00a896;
+            --primary-yellow: #f4d35e;
+            --primary-blue: #4a90e2;
+            --date-red: #ff5a5f;
+            --overlay-bg: rgba(0, 0, 0, 0.4);
+            
+            /* PTO THEME */
+            --brand-yellow: #fdc628;
+            --brand-black: #000000;
+            --success-green: #4caf50;
+
+            /* SHARED */
+            --text-dark: #1f2937;
+            --text-medium: #4b5563;
+            --text-light: #9ca3af;
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            font-family: var(--font-stack);
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        /* Wrapper for the entire plugin logic */
+        .plugin-wrapper {
+            width: 100%;
+            max-width: 400px;
+            position: relative;
+        }
+
+        /* Helper to toggle between Apps */
+        .app-section {
+            display: none;
+            animation: fadeIn 0.3s ease-out;
+        }
+        .app-section.active-app {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* =========================================
+           APP 1: CLINICAL SHIFTS STYLES
+           ========================================= */
+        .shifts-card {
+            background-color: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            position: relative;
+            padding-bottom: 20px;
+        }
+
+        .header {
+            padding: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .header h2 { margin: 0; font-size: 20px; color: var(--text-dark); }
+        .subtitle { font-size: 13px; color: var(--text-light); margin-top: 4px; }
+
+        /* The "Request PTO" Button in Top Right */
+        .btn-nav-pto {
+            background-color: var(--brand-yellow);
+            color: var(--brand-black);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .btn-nav-pto:hover { opacity: 0.8; }
+
+        /* Calendar */
+        .calendar-wrapper { padding: 0 20px 20px; border-bottom: 1px solid #f3f4f6; margin-bottom: 10px; }
+        .calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); margin-bottom: 8px; justify-items: center; }
+        .weekday { font-size: 10px; font-weight: 700; color: var(--text-light); text-transform: uppercase; }
+        .calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 8px; justify-items: center; }
+        .day { width: 32px; height: 32px; font-size: 13px; display: flex; align-items: center; justify-content: center; border-radius: 50%; cursor: pointer; position: relative; }
+        .day:hover { background-color: #f3f4f6; }
+        .day.has-shift::after { content: ''; position: absolute; bottom: 4px; width: 4px; height: 4px; background-color: var(--primary-teal); border-radius: 50%; }
+        .day.other-month { color: #e5e7eb; }
+
+        /* Shift List */
+        .shift-list { list-style: none; padding: 0 20px; margin: 0; }
+        .shift-item { display: flex; align-items: stretch; background: #fff; padding: 16px 0; border-bottom: 1px solid #f3f4f6; cursor: pointer; }
+        .status-bar { width: 6px; border-radius: 4px; margin-right: 16px; flex-shrink: 0; }
+        .status-teal { background-color: var(--primary-teal); }
+        .status-yellow { background-color: var(--primary-yellow); }
+        .status-blue { background-color: var(--primary-blue); }
+        .shift-content { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; }
+        .shift-role { font-size: 16px; font-weight: 600; color: var(--text-dark); margin: 0 0 4px 0; }
+        .shift-meta { font-size: 13px; color: var(--text-medium); display: flex; align-items: center; gap: 6px; }
+        .date-badge { width: 48px; height: 52px; border-radius: 12px; background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.08); overflow: hidden; text-align: center; margin-left: 12px; display: flex; flex-direction: column; }
+        .date-month { background-color: var(--date-red); color: white; font-size: 10px; font-weight: 700; padding: 4px 0; }
+        .date-day { flex-grow: 1; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: var(--text-dark); }
+
+        /* Shift Modal */
+        .modal-backdrop { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--overlay-bg); backdrop-filter: blur(2px); display: flex; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; z-index: 100; border-radius: 20px; }
+        .modal-backdrop.active { opacity: 1; pointer-events: auto; }
+        .modal-card { background-color: white; width: 100%; border-radius: 24px 24px 0 0; padding: 24px; box-shadow: 0 -4px 20px rgba(0,0,0,0.1); transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column; gap: 16px; box-sizing: border-box; }
+        .modal-backdrop.active .modal-card { transform: translateY(0); }
+        .modal-header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .modal-title-group h3 { margin: 0; font-size: 20px; color: var(--text-dark); }
+        .detail-row { display: flex; align-items: center; gap: 12px; padding: 12px; background-color: #f9fafb; border-radius: 12px; }
+        .detail-text h4 { margin: 0; font-size: 12px; color: var(--text-light); text-transform: uppercase; }
+        .detail-text p { margin: 2px 0 0 0; font-size: 15px; font-weight: 600; color: var(--text-dark); }
+        .btn-swap { background-color: var(--primary-teal); color: white; border: none; padding: 16px; border-radius: 14px; font-size: 16px; font-weight: 600; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 8px; }
+        .btn-swap:disabled { background-color: #9ca3af; cursor: not-allowed; }
+
+        /* =========================================
+           APP 2: PTO APP STYLES
+           ========================================= */
+        .pto-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+            position: relative;
+            min-height: 550px;
+        }
+
+        /* PTO Views */
+        .view { display: none; padding: 20px; }
+        .view.active { display: block; animation: fadeIn 0.3s; }
+
+        /* PTO Components */
+        .btn { width: 100%; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 15px; position: relative; z-index: 50; }
+        .btn-primary { background-color: var(--brand-yellow); color: var(--brand-black); }
+        .btn-text { background: transparent; color: #666; margin-top: 5px; }
+        .form-group { margin-bottom: 15px; }
+        .form-label { display: block; font-size: 12px; color: #666; margin-bottom: 5px; }
+        .form-control { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 16px; box-sizing: border-box; }
+        .balance-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #eee; }
+        .dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+
+        /* Back Button for PTO */
+        .btn-back-shifts {
+            background: transparent; border: none; color: #666; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 5px; margin-bottom: 10px;
+        }
+
+        /* Loaders & Status */
+        .loading-spinner { width: 16px; height: 16px; border: 2px solid #ffffff; border-bottom-color: transparent; border-radius: 50%; display: inline-block; animation: rotation 1s linear infinite; }
+        #loader { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); display: none; justify-content: center; align-items: center; z-index: 200; }
+        .spinner-large { width: 40px; height: 40px; border: 4px solid #eee; border-top: 4px solid var(--brand-yellow); border-radius: 50%; animation: rotation 1s linear infinite; }
+        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .success-icon { font-size: 40px; color: var(--success-green); background: #e8f5e9; width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; }
+        .status-message { font-size: 13px; text-align: center; margin-top: -8px; min-height: 20px; font-weight: 500; }
+        .status-success { color: #10b981; }
+        .status-error { color: #ef4444; }
+
+    </style>
+</head>
+<body>
+
+    <div class="plugin-wrapper">
+
+        <div id="app-shifts" class="app-section active-app">
+            <div class="shifts-card">
+                
+                <div class="header">
+                    <div>
+                        <h2>My Shifts</h2>
+                        <div class="subtitle">December 2025</div>
+                    </div>
+                    <button id="nav-to-pto" class="btn-nav-pto">
+                        Request PTO ➔
+                    </button>
+                </div>
+
+                <div class="calendar-wrapper">
+                    <div class="calendar-weekdays">
+                        <div class="weekday">Mon</div><div class="weekday">Tue</div><div class="weekday">Wed</div><div class="weekday">Thu</div><div class="weekday">Fri</div><div class="weekday">Sat</div><div class="weekday">Sun</div>
+                    </div>
+                    <div class="calendar-days">
+                        <div class="day">1</div><div class="day">2</div><div class="day">3</div><div class="day">4</div>
+                        <div class="day has-shift" onclick="openModal('ICU Night Rotation', '20:00 - 08:00', 'Medical City - ICU Wing', 'Dec 05')">5</div>
+                        <div class="day has-shift" onclick="openModal('ER Triage', '07:00 - 15:00', 'Charlton Med - ER', 'Dec 06')">6</div>
+                        <div class="day">7</div>
+                        <div class="day has-shift" onclick="openModal('Pediatrics Rounding', '08:00 - 16:00', 'Childrens Health', 'Dec 08')">8</div>
+                        <div class="day">9</div><div class="day">10</div><div class="day">11</div><div class="day">12</div><div class="day">13</div><div class="day">14</div><div class="day">15</div>
+                        <div class="day">16</div><div class="day">17</div><div class="day">18</div><div class="day">19</div><div class="day">20</div><div class="day">21</div><div class="day">22</div>
+                        <div class="day">23</div><div class="day">24</div><div class="day">25</div><div class="day">26</div><div class="day">27</div><div class="day">28</div><div class="day">29</div>
+                        <div class="day">30</div><div class="day">31</div>
+                    </div>
+                </div>
+
+                <ul class="shift-list">
+                    <li class="shift-item" onclick="openModal('ICU Night Rotation', '20:00 - 08:00', 'Medical City - ICU Wing', 'Dec 05')">
+                        <div class="status-bar status-teal"></div>
+                        <div class="shift-content">
+                            <div class="shift-role">ICU Night Rotation</div>
+                            <div class="shift-meta"><span>📍</span> Medical City - ICU Wing</div>
+                            <div class="shift-meta" style="margin-top: 2px;"><span>⏰ 20:00 - 08:00 (12h)</span></div>
+                        </div>
+                        <div class="date-badge"><div class="date-month">DEC</div><div class="date-day">05</div></div>
+                    </li>
+                    <li class="shift-item" onclick="openModal('ER Triage', '07:00 - 15:00', 'Charlton Med - ER', 'Dec 06')">
+                        <div class="status-bar status-yellow"></div>
+                        <div class="shift-content">
+                            <div class="shift-role">ER Triage</div>
+                            <div class="shift-meta"><span>📍</span> Charlton Med - ER</div>
+                            <div class="shift-meta" style="margin-top: 2px;"><span>⏰ 07:00 - 15:00 (8h)</span></div>
+                        </div>
+                        <div class="date-badge"><div class="date-month">DEC</div><div class="date-day">06</div></div>
+                    </li>
+                    <li class="shift-item" onclick="openModal('Pediatrics Rounding', '08:00 - 16:00', 'Childrens Health', 'Dec 08')">
+                        <div class="status-bar status-blue"></div>
+                        <div class="shift-content">
+                            <div class="shift-role">Pediatrics Rounding</div>
+                            <div class="shift-meta"><span>📍</span> Children's Health</div>
+                            <div class="shift-meta" style="margin-top: 2px;"><span>⏰ 08:00 - 16:00 (8h)</span></div>
+                        </div>
+                        <div class="date-badge"><div class="date-month">DEC</div><div class="date-day">08</div></div>
+                    </li>
+                </ul>
+
+                <div class="modal-backdrop" id="shiftModal">
+                    <div class="modal-card">
+                        <div class="modal-header">
+                            <div class="modal-title-group">
+                                <h3 id="modalTitle">Shift Name</h3>
+                                <div class="subtitle" id="modalDate">Date</div>
+                            </div>
+                            <div style="cursor:pointer; padding:5px;" onclick="closeModal()">✕</div>
+                        </div>
+                        <div class="detail-row">
+                            <div style="font-size:20px;">🏥</div>
+                            <div class="detail-text"><h4>Location</h4><p id="modalLocation">Loc</p></div>
+                        </div>
+                        <div class="detail-row">
+                            <div style="font-size:20px;">⏰</div>
+                            <div class="detail-text"><h4>Time</h4><p id="modalTime">Time</p></div>
+                        </div>
+                        <div class="status-message" id="statusMessage"></div>
+                        <button class="btn-swap" id="swapBtn" onclick="triggerSwap()">
+                            <span>Request Shift Swap</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="app-pto" class="app-section">
+            <div class="pto-card">
+                <div id="loader"><div class="spinner-large"></div></div>
+
+                <div id="view-dashboard" class="view active">
+                    <button class="btn-back-shifts" onclick="navToShifts()">← Back to Shifts</button>
+                    <h2>Time Off</h2>
+                    <div style="background:#fff; border-radius:12px; margin-bottom:20px; border: 1px solid #eee;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:10px; padding:15px 15px 0 15px;">
+                            <h3>Balance</h3><small style="color:#888;">Days Available</small>
+                        </div>
+                        <div style="padding:0 15px;">
+                            <div class="balance-row">
+                                <div><span class="dot" style="background:#4caf50;"></span>Vacation</div>
+                                <div><b>4</b> <small>/10</small></div>
+                            </div>
+                            <div class="balance-row">
+                                <div><span class="dot" style="background:#ff9800;"></span>Sick</div>
+                                <div><b>8</b> <small>/10</small></div>
+                            </div>
+                            <div class="balance-row" style="border:none">
+                                <div><span class="dot" style="background:#2196f3;"></span>WFH</div>
+                                <div><b>4</b> <small>/5</small></div>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="btn-to-form" class="btn btn-primary">Book time off</button>
+                </div>
+
+                <div id="view-form" class="view">
+                    <h2>Book time off</h2>
+                    <form id="ptoForm" onsubmit="return false;">
+                        <div class="form-group">
+                            <label class="form-label">Leave type</label>
+                            <select class="form-control"><option>Vacation</option><option>Sick</option></select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Date</label>
+                            <input type="date" class="form-control" id="leaveDate">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Comment</label>
+                            <input type="text" class="form-control" placeholder="Optional">
+                        </div>
+                    </form>
+                    <button id="btn-submit" type="button" class="btn btn-primary">Submit Request</button>
+                    <button id="btn-cancel" type="button" class="btn btn-text">Cancel</button>
+                </div>
+
+                <div id="view-success" class="view">
+                    <div style="text-align:center; padding-top:40px;">
+                        <div class="success-icon">✓</div>
+                        <h2>Request Submitted</h2>
+                        <p style="color:#666; margin-bottom:30px;">Your PTO request has been submitted to your manager.</p>
+                        <button id="btn-done" class="btn btn-primary">Done</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. NAVIGATION CONTROLLER (Switch Apps)
+        // ==========================================
+        const appShifts = document.getElementById('app-shifts');
+        const appPto = document.getElementById('app-pto');
+
+        // Click "Request PTO" in Shifts App
+        document.getElementById('nav-to-pto').onclick = function() {
+            appShifts.classList.remove('active-app');
+            appPto.classList.add('active-app');
+        };
+
+        // Click "Back to Shifts" in PTO App
+        function navToShifts() {
+            appPto.classList.remove('active-app');
+            appShifts.classList.add('active-app');
+        }
+
+        // ==========================================
+        // 2. SHIFTS APP LOGIC
+        // ==========================================
+        const modal = document.getElementById('shiftModal');
+        const swapBtn = document.getElementById('swapBtn');
+        const statusMsg = document.getElementById('statusMessage');
+
+        function openModal(title, time, location, date) {
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('modalTime').innerText = time;
+            document.getElementById('modalLocation').innerText = location;
+            document.getElementById('modalDate').innerText = date;
+            
+            // Reset UI
+            statusMsg.innerText = '';
+            statusMsg.className = 'status-message';
+            swapBtn.disabled = false;
+            swapBtn.innerHTML = `<span>Request Shift Swap</span>`;
+            modal.classList.add('active');
+        }
+
+        function closeModal() { modal.classList.remove('active'); }
+
+        // Close on clicking backdrop
+        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+        async function triggerSwap() {
+            swapBtn.disabled = true;
+            swapBtn.innerHTML = `<span class="loading-spinner"></span> Sending...`;
+            
+            // API Payload for Swap
+            const payload = {
+                "accessorIds": [ "68362d155187c875bbb106d8" ],
+                "channels": [ "notificationCenter", "push" ],
+                "content": { "en_US": { "text": "Shift Swap Initiated" } },
+                "icon": { "en_US": { "type": "font", "char": "n" } },
+                "image": { "en_US": { "type": "image", "href": "https://cdn-icons-png.flaticon.com/512/8677/8677730.png", "width": 600, "height": 400 } }
+            };
+
+            try {
+                await fetch('https://app.staffbase.com/api/branch/notifications', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+            } catch (err) {
+                console.log("Swap API failed/blocked (Expected in demo):", err);
+            }
+
+            // Force Success State
+            setTimeout(() => {
+                swapBtn.innerHTML = `<span>✔ Request Sent</span>`;
+                statusMsg.className = 'status-message status-success';
+                statusMsg.innerText = 'Manager notified successfully.';
+                setTimeout(() => { closeModal(); }, 2000);
+            }, 1500);
+        }
+
+        // ==========================================
+        // 3. PTO APP LOGIC
+        // ==========================================
+        (function() {
+            var vDash = document.getElementById('view-dashboard');
+            var vForm = document.getElementById('view-form');
+            var vSuccess = document.getElementById('view-success');
+            var loader = document.getElementById('loader');
+            
+            var btnToForm = document.getElementById('btn-to-form');
+            var btnSubmit = document.getElementById('btn-submit');
+            var btnCancel = document.getElementById('btn-cancel');
+            var btnDone = document.getElementById('btn-done');
+
+            function showView(view) {
+                vDash.className = 'view';
+                vForm.className = 'view';
+                vSuccess.className = 'view';
+                view.className = 'view active';
+            }
+
+            btnToForm.onclick = function() {
+                document.getElementById('leaveDate').valueAsDate = new Date();
+                showView(vForm);
+            };
+
+            btnCancel.onclick = function() { showView(vDash); };
+            
+            // Done Button - Returns to PTO Dashboard, but user could also click "Back to Shifts" at top
+            btnDone.onclick = function() { showView(vDash); };
+
+            btnSubmit.onclick = async function() {
+                loader.style.display = 'flex';
+
+                var url = 'https://app.staffbase.com/api/branch/notifications';
+                var token = 'Basic NjgzNjc4ZDVjYTRjODk3MThhZjQxMDRiOl1TT3swcl8yKkRsMlNbcVpRaXY4RSwwKzdZbSE3KChXcVMsXkpZYlN5cTFuTW9FKUY2UyQkLEoqUy5ZRkRCK30=';
+                var payload = {
+                    "accessorIds": ["68362d155187c875bbb106d8"],
+                    "channels": ["notificationCenter", "push"],
+                    "content": { "en_US": { "text": "PTO Request has been submitted to your manager" } },
+                    "icon": { "en_US": { "type": "font", "char": "n" } },
+                    "image": { "en_US": { "type": "image", "href": "https://www.ukg.com/themes/custom/ukg_theme/logo.svg", "width": 600, "height": 400 } }
+                };
+
+                try {
+                    await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                } catch (err) {
+                    console.log("PTO API Blocked/Failed (Expected in Demo): " + err);
+                }
+
+                // Force Success Screen
+                setTimeout(function() {
+                    loader.style.display = 'none';
+                    showView(vSuccess);
+                }, 1000);
+            };
+        })();
+    </script>
+</body>
+</html>
